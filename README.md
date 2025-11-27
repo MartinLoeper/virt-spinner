@@ -1,8 +1,8 @@
 # Host & VM Management Notes
 
 ## Host Summary
-- Hostname: `srv.polymechano.com`
-- Hardware: Gigabyte Technology Co., Ltd. `B460MAORUSPRO` (desktop chassis, firmware F3)
+- Hostname: `srv.yourdomain.com`
+- Hardware: Gigabyte Technology Co., Ltd. (desktop chassis, firmware F3)
 - Architecture: `x86_64`
 - Operating system: Debian GNU/Linux 13 (trixie) `13.2`
 - Kernel: `Linux 6.12.57+deb13-amd64` (PREEMPT_DYNAMIC)
