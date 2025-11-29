@@ -2088,6 +2088,25 @@ clone_vm() {
   clear
   gum style --bold --foreground 212 "═══ Clone VM: $source_vm ═══"
   echo
+  gum style --foreground 8 "Press ESC anytime to cancel and return to VM menu"
+  echo
+  
+  # Helper function to handle gum input with cancellation
+  safe_gum_input() {
+    local result
+    set +e
+    result=$(gum input "$@" 2>/dev/null)
+    local exit_code=$?
+    set -e
+    
+    if [[ $exit_code -ne 0 ]]; then
+      # User cancelled (ESC pressed)
+      return 1
+    fi
+    
+    echo "$result"
+    return 0
+  }
   
   # Check if VM is running
   vm_state=$(virsh -c "$conn_uri" domstate "$source_vm" 2>/dev/null || echo "unknown")
@@ -2120,7 +2139,13 @@ clone_vm() {
   fi
   
   # Get new VM name
-  new_vm_name=$(gum input --placeholder "Enter new VM name" --prompt "New VM name: ")
+  new_vm_name=$(safe_gum_input --placeholder "Enter new VM name" --prompt "New VM name: ")
+  if [[ $? -ne 0 ]]; then
+    gum style --foreground 3 "✗ Clone cancelled."
+    read -p "Press Enter to continue..."
+    return
+  fi
+  
   if [[ -z "$new_vm_name" ]]; then
     gum style --foreground 1 "✗ No name provided. Clone aborted."
     read -p "Press Enter to continue..."
@@ -2891,9 +2916,34 @@ create_new_vm() {
   clear
   gum style --bold --foreground 212 "═══ Create New Virtual Machine ═══"
   echo
+  gum style --foreground 8 "Press ESC anytime to cancel and return to main menu"
+  echo
+  
+  # Helper function to handle gum input with cancellation
+  safe_gum_input() {
+    local result
+    set +e
+    result=$(gum input "$@" 2>/dev/null)
+    local exit_code=$?
+    set -e
+    
+    if [[ $exit_code -ne 0 ]]; then
+      # User cancelled (ESC pressed)
+      return 1
+    fi
+    
+    echo "$result"
+    return 0
+  }
   
   # VM Name
-  vm_name=$(gum input --placeholder "Enter VM name" --prompt "VM Name: ")
+  vm_name=$(safe_gum_input --placeholder "Enter VM name" --prompt "VM Name: ")
+  if [[ $? -ne 0 ]]; then
+    gum style --foreground 3 "✗ VM creation cancelled."
+    read -p "Press Enter to continue..."
+    return
+  fi
+  
   if [[ -z "$vm_name" ]]; then
     gum style --foreground 1 "✗ No name provided. Aborting."
     read -p "Press Enter to continue..."
@@ -2909,10 +2959,21 @@ create_new_vm() {
   
   # OS Variant
   gum style --foreground 8 "Common OS variants: win11, win10, debian12, ubuntu24.04, rhel9, generic"
-  os_variant=$(gum input --placeholder "e.g., win11, debian12, generic" --prompt "OS Variant: " --value "generic")
+  os_variant=$(safe_gum_input --placeholder "e.g., win11, debian12, generic" --prompt "OS Variant: " --value "generic")
+  if [[ $? -ne 0 ]]; then
+    gum style --foreground 3 "✗ VM creation cancelled."
+    read -p "Press Enter to continue..."
+    return
+  fi
   
   # Memory (MB)
-  memory=$(gum input --placeholder "Memory in MB (e.g., 4096)" --prompt "Memory (MB): " --value "4096")
+  memory=$(safe_gum_input --placeholder "Memory in MB (e.g., 4096)" --prompt "Memory (MB): " --value "4096")
+  if [[ $? -ne 0 ]]; then
+    gum style --foreground 3 "✗ VM creation cancelled."
+    read -p "Press Enter to continue..."
+    return
+  fi
+  
   if ! [[ "$memory" =~ ^[0-9]+$ ]]; then
     gum style --foreground 1 "✗ Invalid memory value. Aborting."
     read -p "Press Enter to continue..."
@@ -2920,7 +2981,13 @@ create_new_vm() {
   fi
   
   # vCPUs
-  vcpus=$(gum input --placeholder "Number of vCPUs (e.g., 4)" --prompt "vCPUs: " --value "4")
+  vcpus=$(safe_gum_input --placeholder "Number of vCPUs (e.g., 4)" --prompt "vCPUs: " --value "4")
+  if [[ $? -ne 0 ]]; then
+    gum style --foreground 3 "✗ VM creation cancelled."
+    read -p "Press Enter to continue..."
+    return
+  fi
+  
   if ! [[ "$vcpus" =~ ^[0-9]+$ ]]; then
     gum style --foreground 1 "✗ Invalid vCPU value. Aborting."
     read -p "Press Enter to continue..."
@@ -2935,7 +3002,13 @@ create_new_vm() {
   cpu_mode=${cpu_mode%% *}
   
   # Primary Disk
-  disk_size=$(gum input --placeholder "Disk size in GB (e.g., 100)" --prompt "Primary Disk Size (GB): " --value "100")
+  disk_size=$(safe_gum_input --placeholder "Disk size in GB (e.g., 100)" --prompt "Primary Disk Size (GB): " --value "100")
+  if [[ $? -ne 0 ]]; then
+    gum style --foreground 3 "✗ VM creation cancelled."
+    read -p "Press Enter to continue..."
+    return
+  fi
+  
   if ! [[ "$disk_size" =~ ^[0-9]+$ ]]; then
     gum style --foreground 1 "✗ Invalid disk size. Aborting."
     read -p "Press Enter to continue..."
@@ -2952,7 +3025,13 @@ create_new_vm() {
   # Second Disk
   add_second_disk=false
   if gum confirm "Add a second disk?"; then
-    second_disk_size=$(gum input --placeholder "Second disk size in GB" --prompt "Second Disk Size (GB): ")
+    second_disk_size=$(safe_gum_input --placeholder "Second disk size in GB" --prompt "Second Disk Size (GB): ")
+    if [[ $? -ne 0 ]]; then
+      gum style --foreground 3 "✗ VM creation cancelled."
+      read -p "Press Enter to continue..."
+      return
+    fi
+    
     if [[ -n "$second_disk_size" ]] && [[ "$second_disk_size" =~ ^[0-9]+$ ]]; then
       add_second_disk=true
       second_disk_cache=$(gum choose --header="Second Disk Cache Mode:" \
@@ -3303,14 +3382,20 @@ create_new_vm() {
   if [[ "$graphics_type" == "vnc" ]]; then
     if gum confirm "Set VNC password?"; then
       while true; do
-        vnc_password=$(gum input --placeholder "VNC password (max 8 chars)" --password --prompt "VNC Password: ")
+        vnc_password=$(safe_gum_input --placeholder "VNC password (max 8 chars)" --password --prompt "VNC Password: ")
+        if [[ $? -ne 0 ]]; then
+          gum style --foreground 3 "✗ VM creation cancelled."
+          read -p "Press Enter to continue..."
+          return
+        fi
+        
         if [[ -z "$vnc_password" ]]; then
-          gum style --foreground 3 "Password cannot be empty. Try again or press Ctrl+C to skip."
+          gum style --foreground 3 "Password cannot be empty. Try again or press ESC to skip."
           continue
         elif [[ ${#vnc_password} -gt 8 ]]; then
           gum style --foreground 3 "⚠️  VNC password max length is 8 characters. Truncating to: ${vnc_password:0:8}"
           vnc_password="${vnc_password:0:8}"
-    sleep 2
+          sleep 2
           break
         else
           break
@@ -3322,7 +3407,13 @@ create_new_vm() {
     fi
   elif [[ "$graphics_type" == "spice" ]]; then
     if gum confirm "Set SPICE password?"; then
-      spice_password=$(gum input --placeholder "SPICE password" --password --prompt "SPICE Password: ")
+      spice_password=$(safe_gum_input --placeholder "SPICE password" --password --prompt "SPICE Password: ")
+      if [[ $? -ne 0 ]]; then
+        gum style --foreground 3 "✗ VM creation cancelled."
+        read -p "Press Enter to continue..."
+        return
+      fi
+      
       if [[ -z "$spice_password" ]]; then
         gum style --foreground 3 "⚠️  Empty password, SPICE will run without password."
         spice_password=""
@@ -3352,7 +3443,13 @@ create_new_vm() {
       network_opt="--network network=default"
       ;;
     "bridge"*)
-      bridge_name=$(gum input --placeholder "Bridge name (e.g., br0)" --prompt "Bridge: " --value "br0")
+      bridge_name=$(safe_gum_input --placeholder "Bridge name (e.g., br0)" --prompt "Bridge: " --value "br0")
+      if [[ $? -ne 0 ]]; then
+        gum style --foreground 3 "✗ VM creation cancelled."
+        read -p "Press Enter to continue..."
+        return
+      fi
+      
       network_mode="bridge"
       network_summary="Bridge: $bridge_name"
       network_opt="--network bridge=$bridge_name"
