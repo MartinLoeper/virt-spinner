@@ -4192,14 +4192,8 @@ create_new_vm() {
     virt_cmd="$virt_cmd --cpu $cpu_mode"
   fi
   
-  # Secure Boot (only for UEFI)
-  if [[ "$firmware" == "uefi" ]]; then
-    if [[ "$vm_secure_boot" == "true" ]]; then
-      virt_cmd="$virt_cmd --features secureboot=on"
-    else
-      virt_cmd="$virt_cmd --features secureboot=off"
-    fi
-  fi
+  # Secure Boot (only for UEFI) - configured via --boot with firmware features
+  # Syntax: --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=yes/no
   
   # TPM emulation
   if [[ "$vm_tpm" == "true" ]]; then
@@ -4222,9 +4216,12 @@ create_new_vm() {
     virt_cmd="$virt_cmd --cdrom \"$escaped_iso\""
     
     if [[ "$firmware" == "uefi" ]]; then
-      # For UEFI: enable UEFI firmware and set CDROM as first boot device
-      # Using separate options ensures proper boot order configuration
-      virt_cmd="$virt_cmd --boot uefi"
+      # For UEFI: enable UEFI firmware with secure boot configuration
+      if [[ "$vm_secure_boot" == "true" ]]; then
+        virt_cmd="$virt_cmd --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=yes"
+      else
+        virt_cmd="$virt_cmd --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=no"
+      fi
       virt_cmd="$virt_cmd --boot cdrom,hd,menu=on"
     else
       # BIOS: standard boot order
@@ -4233,7 +4230,11 @@ create_new_vm() {
   else
     virt_cmd="$virt_cmd --pxe"
     if [[ "$firmware" == "uefi" ]]; then
-      virt_cmd="$virt_cmd --boot uefi"
+      if [[ "$vm_secure_boot" == "true" ]]; then
+        virt_cmd="$virt_cmd --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=yes"
+      else
+        virt_cmd="$virt_cmd --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=no"
+      fi
       virt_cmd="$virt_cmd --boot network,hd,menu=on"
     else
       virt_cmd="$virt_cmd --boot network,hd,menu=on"
