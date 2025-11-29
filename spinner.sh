@@ -3716,9 +3716,10 @@ create_new_vm() {
     virt_cmd="$virt_cmd --cdrom \"$escaped_iso\""
     
     if [[ "$firmware" == "uefi" ]]; then
-      # For UEFI: combine uefi firmware with boot order
-      # This enables UEFI and sets CDROM as first boot device
-      virt_cmd="$virt_cmd --boot uefi,cdrom,hd,menu=on"
+      # For UEFI: enable UEFI firmware and set CDROM as first boot device
+      # Using separate options ensures proper boot order configuration
+      virt_cmd="$virt_cmd --boot uefi"
+      virt_cmd="$virt_cmd --boot cdrom,hd,menu=on"
     else
       # BIOS: standard boot order
       virt_cmd="$virt_cmd --boot cdrom,hd,menu=on"
@@ -3726,7 +3727,8 @@ create_new_vm() {
   else
     virt_cmd="$virt_cmd --pxe"
     if [[ "$firmware" == "uefi" ]]; then
-      virt_cmd="$virt_cmd --boot uefi,network,hd,menu=on"
+      virt_cmd="$virt_cmd --boot uefi"
+      virt_cmd="$virt_cmd --boot network,hd,menu=on"
     else
       virt_cmd="$virt_cmd --boot network,hd,menu=on"
     fi
@@ -3853,6 +3855,29 @@ create_new_vm() {
   
   if [[ $vm_creation_result -eq 0 ]]; then
     gum style --foreground 2 "✓ VM '$vm_name' created successfully!"
+    
+    # Configure UEFI boot order if needed
+    if [[ "$firmware" == "uefi" && -n "$first_iso" ]]; then
+      # For UEFI, ensure CDROM is first in boot order
+      # UEFI sometimes doesn't respect boot order from virt-install, so we fix it post-creation
+      gum style --foreground 6 "⚙️  Configuring UEFI boot order..."
+      
+      # Use virt-xml to set boot order (most reliable method)
+      if command -v virt-xml &>/dev/null; then
+        if virt-xml "$vm_name" --edit --boot order=cdrom,hd 2>/dev/null; then
+          gum style --foreground 2 "✓ Boot order configured (CDROM first)"
+        else
+          gum style --foreground 3 "⚠️  Could not set boot order automatically"
+          gum style --foreground 8 "   If VM shows 'No bootable device', press ESC during boot"
+          gum style --foreground 8 "   and manually select 'UEFI QEMU DVD-ROM' from the boot menu"
+        fi
+      else
+        # virt-xml not available - provide helpful message
+        gum style --foreground 3 "⚠️  virt-xml not available - boot order may need manual selection"
+        gum style --foreground 8 "   Install: sudo dnf install libguestfs-tools (Fedora) or sudo apt install libguestfs-tools (Debian)"
+        gum style --foreground 8 "   Or: Press ESC during boot and select 'UEFI QEMU DVD-ROM' from boot menu"
+      fi
+    fi
     
     # Gather display info
     host_ip=$(hostname -I | awk '{print $1}')
