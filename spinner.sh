@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Version and Author Info
-VERSION="1.0"
+VERSION="1.1"
 AUTHOR_NAME="Lefteris Iliadis"
 AUTHOR_EMAIL="me@lefteros.com"
 
@@ -3033,6 +3033,23 @@ create_new_vm() {
     "default")
   cpu_mode=${cpu_mode%% *}
   
+  # Firmware Selection
+  echo ""
+  gum style --foreground 6 --bold "💾 Firmware Type"
+  gum style --foreground 8 "💡 UEFI: Modern firmware, supports Secure Boot, required for Windows 11"
+  gum style --foreground 8 "   BIOS: Legacy firmware, better compatibility with older systems"
+  gum style --foreground 8 "   Tip: Use UEFI for new OSes (Windows 10+, modern Linux), BIOS for older systems"
+  
+  firmware_type=$(gum choose --header="Firmware Type:" \
+    "UEFI (recommended for modern OSes)" \
+    "BIOS (legacy, better compatibility)")
+  
+  if [[ "$firmware_type" =~ ^UEFI ]]; then
+    firmware="uefi"
+  else
+    firmware="bios"
+  fi
+  
   # Primary Disk
   echo ""
   gum style --foreground 6 --bold "💿 Primary Disk Size"
@@ -3626,10 +3643,18 @@ create_new_vm() {
     # Escape the ISO path properly for eval
     local escaped_iso="${first_iso//\"/\\\"}"
     virt_cmd="$virt_cmd --cdrom \"$escaped_iso\""
-    virt_cmd="$virt_cmd --boot cdrom,hd,menu=on"
+    if [[ "$firmware" == "uefi" ]]; then
+      virt_cmd="$virt_cmd --boot uefi,cdrom,hd,menu=on"
+    else
+      virt_cmd="$virt_cmd --boot cdrom,hd,menu=on"
+    fi
   else
     virt_cmd="$virt_cmd --pxe"
-    virt_cmd="$virt_cmd --boot network,hd,menu=on"
+    if [[ "$firmware" == "uefi" ]]; then
+      virt_cmd="$virt_cmd --boot uefi,network,hd,menu=on"
+    else
+      virt_cmd="$virt_cmd --boot network,hd,menu=on"
+    fi
   fi
   
   # Second ISO
@@ -3698,6 +3723,7 @@ create_new_vm() {
     "Memory:        ${memory}MB" \
     "vCPUs:         $vcpus" \
     "CPU Mode:      $cpu_mode" \
+    "Firmware:      ${firmware^^}" \
     "Disk 1:        ${disk_size}GB (cache=$disk_cache)" \
     "$([ "$add_second_disk" == true ] && echo "Disk 2:        ${second_disk_size}GB (cache=$second_disk_cache)" || echo "")" \
     "Boot ISO:      ${first_iso:-PXE}" \
