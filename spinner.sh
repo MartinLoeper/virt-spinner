@@ -2931,9 +2931,11 @@ create_new_vm() {
   fi
   
   # OS Variant
-  gum style --foreground 8 "Common OS variants: win11, win10, debian12, ubuntu24.04, rhel9, generic"
+  gum style --foreground 8 "OS variants: win11, win10, win8, win7, win2k22, win2k19, debian12, debian11, ubuntu24.04,"
+  gum style --foreground 8 "ubuntu22.04, ubuntu20.04, fedora39, fedora38, rhel9, rhel8, centos9, centos8, arch, manjaro,"
+  gum style --foreground 8 "opensuse-tumbleweed, opensuse-leap15.5, freebsd14.0, openbsd7.4, generic (or use: osinfo-query os)"
   set +e
-  os_variant=$(gum input --placeholder "e.g., win11, debian12, generic" --prompt "OS Variant: " --value "generic")
+  os_variant=$(gum input --placeholder "e.g., win11, debian12, ubuntu24.04, generic" --prompt "OS Variant: " --value "generic")
   input_result=$?
   set -e
   if [[ $input_result -ne 0 ]]; then
@@ -3052,7 +3054,7 @@ create_new_vm() {
         # Use gum file to browse (handle cancellation)
         local selected_file
         set +e
-        selected_file=$(gum file --directory="$start_dir" --file --height=20)
+        selected_file=$(gum file "$start_dir" --height=20)
         local browse_result=$?
         set -e
         
@@ -3386,6 +3388,17 @@ create_new_vm() {
     "none (headless)")
   graphics_type=${graphics_type%% *}
   
+  # 3D Acceleration
+  enable_3d=false
+  if [[ "$graphics_type" == "spice" ]]; then
+    if gum confirm "Enable 3D acceleration (virtio-gl)?"; then
+      enable_3d=true
+      gum style --foreground 6 "ℹ️  3D acceleration enabled. Guest needs virtio GPU drivers."
+      gum style --foreground 8 "   Linux: Usually included. Windows: Install virtio-win drivers."
+      sleep 2
+    fi
+  fi
+  
   vnc_password=""
   vnc_listen="127.0.0.1"
   spice_password=""
@@ -3526,10 +3539,19 @@ create_new_vm() {
       fi
       ;;
     "spice")
-      if [[ -n "$spice_password" ]]; then
-        virt_cmd="$virt_cmd --graphics spice,password=$spice_password"
+      if [[ "$enable_3d" == true ]]; then
+        # Add 3D acceleration with virtio-gl
+        virt_cmd="$virt_cmd --video virtio --graphics spice,gl=on,listen=none"
+        if [[ -n "$spice_password" ]]; then
+          virt_cmd="$virt_cmd,password=$spice_password"
+        fi
       else
-        virt_cmd="$virt_cmd --graphics spice"
+        # Standard SPICE without 3D
+        if [[ -n "$spice_password" ]]; then
+          virt_cmd="$virt_cmd --graphics spice,password=$spice_password"
+        else
+          virt_cmd="$virt_cmd --graphics spice"
+        fi
       fi
       ;;
     "none")
@@ -3550,8 +3572,15 @@ create_new_vm() {
     graphics_display="$graphics_type (password set, listen=$vnc_listen)"
   elif [[ "$graphics_type" == "vnc" ]]; then
     graphics_display="$graphics_type (no password, listen=$vnc_listen)"
-  elif [[ "$graphics_type" == "spice" && -n "$spice_password" ]]; then
-    graphics_display="$graphics_type (password set)"
+  elif [[ "$graphics_type" == "spice" ]]; then
+    if [[ "$enable_3d" == true ]]; then
+      graphics_display="$graphics_type (3D acceleration, virtio-gl)"
+      if [[ -n "$spice_password" ]]; then
+        graphics_display="$graphics_type (3D acceleration, password set)"
+      fi
+    elif [[ -n "$spice_password" ]]; then
+      graphics_display="$graphics_type (password set)"
+    fi
   fi
   
   gum style --border rounded --padding "0 1" --margin "1 0" \
