@@ -1,4 +1,4 @@
-# 🎯 Virt SPINNER v1.4
+# 🎯 Virt SPINNER v1.5
 ## 💻 The Professional TUI Alternative to Gnome-Boxes & virt-manager
 
 > **Tired of slow, mouse-heavy GUI tools?** VIRT SPINNER brings full libvirt/QEMU/KVM power to your terminal.  
@@ -7,7 +7,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.4-blue.svg?cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-1.5-blue.svg?cacheSeconds=2592000)
 ![Shell](https://img.shields.io/badge/shell-bash-green.svg)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-Personal-orange.svg)
@@ -532,6 +532,12 @@ Still in terminal, context preserved
   - Automatic directory creation if needed
   - Path validation and permission checking
   - Settings persist across sessions
+- **🌐 Network Model Configuration** - Choose network adapter type
+  - Default: e1000 (Intel PRO/1000) for universal compatibility
+  - Works out of the box with all operating systems
+  - Alternative options: virtio (requires drivers), rtl8139, ne2k_pci
+  - Configurable in Settings menu as default for all new VMs
+  - Solves network issues with VMs that don't have virtio drivers
 - **🔄 Intelligent Settings Migration** - Preserves your settings across versions
   - Automatic settings file version tracking
   - Merges new settings with existing ones (doesn't overwrite)
@@ -541,6 +547,18 @@ Still in terminal, context preserved
   - Seamless upgrade experience
 
 ## Previous Versions
+
+### v1.4 - Secure Boot, TPM, Settings Migration & Path Configuration
+
+**VIRT SPINNER v1.4** adds Secure Boot and TPM configuration options, ISO directory path settings, and intelligent settings migration.
+
+### 🆕 New in v1.4
+
+- **🔒 Secure Boot & TPM Configuration** - Full control over VM security features with defaults and per-VM override
+- **📁 ISO Directory Path Settings** - Configurable ISO and disk directory paths in Settings menu
+- **🔄 Intelligent Settings Migration** - Preserves user settings across versions with automatic backup and version tracking
+- **✅ Settings Version Tracking** - Automatic migration when upgrading, only resets if defaults changed
+- **🛡️ User Notification** - Informs users about any settings that were reset during migration
 
 ### v1.3 - Console Connection & Orphaned Disk Detection Fix
 
@@ -833,6 +851,8 @@ All with **clear progress indicators** [1/4], [2/4], etc.
   - VM Security defaults (for new VMs):
     - Secure Boot (disabled by default to avoid MOK prompts)
     - TPM emulation (disabled by default)
+  - Network defaults:
+    - Network model (default: e1000 for universal compatibility)
   - Settings persist in `~/.spinner_settings` with version tracking
 
 - **🔧 Run Diagnostics**: System health checks with:
@@ -856,6 +876,7 @@ All with **clear progress indicators** [1/4], [2/4], etc.
 - **Graphics options**: VNC, SPICE, or headless
 - **3D acceleration support** (virtio-gl for SPICE) with automatic EGL detection
 - **Network modes**: NAT, bridge, or isolated
+- **Network adapter model**: Default e1000 (Intel PRO/1000) for universal compatibility
 - **Boot order configuration** - Automatic for UEFI (auto-boots from ISO), menu enabled
 - Summary review with optional command preview
 
@@ -983,6 +1004,12 @@ Available space in /var/lib/libvirt/images: 500GB
 💡 NAT: VM gets internet via host (easiest, works out of box)
    Bridge: VM appears on LAN (gets own IP, requires bridge setup)
    none: No network (completely isolated)
+   
+Network Model (default: e1000 - Intel PRO/1000):
+   e1000    - Universal support, works out of box (recommended)
+   virtio   - Requires drivers, better performance
+   rtl8139  - Realtek 8139 (legacy compatibility)
+   ne2k_pci - NE2000 PCI (very old systems)
 ```
 
 ### Safety Features
@@ -1383,6 +1410,15 @@ mkdir -p ~/iso
 
 ## Version History
 
+### v1.4 (2025-11-29) - Secure Boot, TPM, Network Model, Settings Migration & Path Configuration
+### v1.5 (2025-11-29) - Network Model Configuration
+- 🌐 **Network Model Configuration** - Default e1000 (Intel PRO/1000) adapter for universal compatibility
+  - Works out of the box with all operating systems (no drivers needed)
+  - Solves network issues with VMs that don't have virtio drivers
+  - Configurable in Settings menu (e1000, virtio, rtl8139, ne2k_pci)
+  - Applied automatically to all new VM creations
+  - Perfect for Linux VMs without virtio drivers installed
+
 ### v1.4 (2025-11-29) - Secure Boot, TPM, Settings Migration & Path Configuration
 - 🔒 **Secure Boot & TPM Configuration** - Full control over VM security features with defaults and per-VM override
 - 📁 **ISO Directory Path Settings** - Configurable ISO and disk directory paths in Settings menu
@@ -1453,6 +1489,7 @@ mkdir -p ~/iso
 
 ## Latest Improvements
 
+- ✅ Network model configuration (v1.5) - Default e1000 adapter for universal compatibility, no drivers needed
 - ✅ Secure Boot & TPM configuration (v1.4) - Disabled by default to avoid MOK prompts, configurable per-VM
 - ✅ ISO directory path settings (v1.4) - Change ISO and disk storage locations from Settings menu
 - ✅ Intelligent settings migration (v1.4) - Preserves user settings across versions with automatic backup
@@ -1559,6 +1596,10 @@ mkdir -p ~/iso
 - **NAT:** Best for most use cases, VM gets internet automatically
 - **Bridge:** When VM needs to appear as separate host on LAN
 - **None:** For completely isolated testing environments
+- **Network Model:** Default is e1000 (Intel PRO/1000) which works out of the box
+  - **e1000:** Recommended - universal support, no drivers needed
+  - **virtio:** Better performance but requires virtio drivers in guest
+  - **rtl8139/ne2k_pci:** Legacy options for very old systems
 
 ### Snapshots
 - **Before major changes:** Create snapshot before updates/config changes
@@ -1572,7 +1613,7 @@ mkdir -p ~/iso
 
 <div align="center">
 
-**VIRT SPINNER v1.4**  
+**VIRT SPINNER v1.5**  
 A project by **Lefteris Iliadis** • [me@lefteros.com](mailto:me@lefteros.com)
 
 ![Made with Love](https://img.shields.io/badge/Made%20with-❤️-red.svg)
