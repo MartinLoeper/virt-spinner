@@ -2,8 +2,10 @@
 
 set -euo pipefail
 
-# Version
-VERSION="0.7"
+# Version and Author Info
+VERSION="0.8"
+AUTHOR_NAME="Lefteris Iliadis"
+AUTHOR_EMAIL="me@lefteros.com"
 
 #####################################################################
 # VIRT SPINNER - Configuration Variables
@@ -58,52 +60,633 @@ export PATH="$HOME/.local/bin:$PATH"
 declare -a VM_NAMES VM_URIS VM_LABELS VM_STATES
 declare -A VM_SEEN
 
-# Check and install dependencies
-check_dependencies() {
-  local missing=()
+# First-run welcome screen
+show_welcome_screen() {
+  clear
   
-  # Check system packages
-  for pkg in "${REQUIRED_PACKAGES[@]}"; do
-    if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
-      missing+=("$pkg")
+  # ASCII Art Banner
+  cat << 'EOF'
+
+  ██╗   ██╗██╗██████╗ ████████╗    ███████╗██████╗ ██╗███╗   ██╗███╗   ██╗███████╗██████╗ 
+  ██║   ██║██║██╔══██╗╚══██╔══╝    ██╔════╝██╔══██╗██║████╗  ██║████╗  ██║██╔════╝██╔══██╗
+  ██║   ██║██║██████╔╝   ██║       ███████╗██████╔╝██║██╔██╗ ██║██╔██╗ ██║█████╗  ██████╔╝
+  ╚██╗ ██╔╝██║██╔══██╗   ██║       ╚════██║██╔═══╝ ██║██║╚██╗██║██║╚██╗██║██╔══╝  ██╔══██╗
+   ╚████╔╝ ██║██║  ██║   ██║       ███████║██║     ██║██║ ╚████║██║ ╚████║███████╗██║  ██║
+    ╚═══╝  ╚═╝╚═╝  ╚═╝   ╚═╝       ╚══════╝╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
+
+EOF
+
+  # Display dynamic version and author info
+  echo "                    🚀 Your Advanced VM Management Tool 🚀"
+  echo "                 Version $VERSION | by $AUTHOR_NAME <$AUTHOR_EMAIL>"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  
+  # Create compact package list
+  local pkg_compact="${REQUIRED_PACKAGES[0]}, ${REQUIRED_PACKAGES[1]}, ${REQUIRED_PACKAGES[2]}, +5 more"
+  
+  # Display info in columns using simple formatting (no gum dependency)
+  echo "  👋 WELCOME - First Time Setup          🔧 SETUP STEPS                    ℹ️  IMPORTANT NOTES"
+  echo ""
+  echo "  Features:                              1. Detect your distro            • Sudo password required"
+  echo "   🖥️  Create & manage VMs                2. Install packages:             • Auto-detects all distros"
+  echo "   ⚡ Quick deployment                       $pkg_compact"
+  echo "   📊 Real-time monitoring                3. Install gum toolkit           • Settings saved for later"
+  echo "   💾 Snapshots & backups                 4. Detect libvirt paths          • Can skip (limited features)"
+  echo "   🔄 Clone & manage VMs                  5. Save config"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  
+  # Get user confirmation
+  read -p "🚀 Ready to set up VIRT SPINNER? [Y/n]: " confirm
+  confirm=${confirm,,}  # Convert to lowercase
+  
+  if [[ "$confirm" == "n" || "$confirm" == "no" ]]; then
+    echo ""
+    echo "❌ Setup cancelled. Run again anytime to complete setup."
+    echo ""
+    exit 0
+  fi
+  
+  echo ""
+  echo "✨ Great! Starting setup..."
+  echo ""
+  sleep 1
+}
+
+# Check if this is the first run
+check_first_run() {
+  # Consider it first run if settings file doesn't exist
+  if [[ ! -f "$SETTINGS_FILE" ]]; then
+    show_welcome_screen
+    
+    # Mark that we've shown the welcome screen
+    mkdir -p "$(dirname "$SETTINGS_FILE")"
+    cat > "$SETTINGS_FILE" << EOF
+# VIRT SPINNER Settings - Auto-generated
+# This file is sourced by spinner.sh to persist configuration
+# Created: $(date)
+
+# First run completed
+FIRST_RUN_DONE=true
+EOF
+  fi
+}
+
+# Detect actual libvirt images directory
+detect_libvirt_images_dir() {
+  local detected_dir=""
+  local distro_info pkg_manager distro
+  
+  # Common libvirt image directories per distro family
+  declare -A DISTRO_DIRS=(
+    ["debian"]="/var/lib/libvirt/images"
+    ["ubuntu"]="/var/lib/libvirt/images"
+    ["fedora"]="/var/lib/libvirt/images"
+    ["nobara"]="/var/lib/libvirt/images"
+    ["rhel"]="/var/lib/libvirt/images"
+    ["centos"]="/var/lib/libvirt/images"
+    ["rocky"]="/var/lib/libvirt/images"
+    ["alma"]="/var/lib/libvirt/images"
+    ["arch"]="/var/lib/libvirt/images"
+    ["manjaro"]="/var/lib/libvirt/images"
+    ["omarchy"]="/var/lib/libvirt/images"
+    ["endeavouros"]="/var/lib/libvirt/images"
+    ["garuda"]="/var/lib/libvirt/images"
+    ["opensuse"]="/var/lib/libvirt/images"
+    ["sles"]="/var/lib/libvirt/images"
+    ["void"]="/var/lib/libvirt/images"
+    ["alpine"]="/var/lib/libvirt/images"
+    ["gentoo"]="/var/lib/libvirt/images"
+  )
+  
+  # Method 1: Check virsh pools (most reliable if libvirt is configured)
+  if command -v virsh &>/dev/null; then
+    # Try system connection first
+    local pool_path
+    pool_path=$(virsh -c qemu:///system pool-dumpxml default 2>/dev/null | grep -oP '(?<=<path>).*(?=</path>)' | head -1)
+    
+    if [[ -n "$pool_path" && -d "$pool_path" ]]; then
+      detected_dir="$pool_path"
+      echo "✓ Detected libvirt images directory from system pool: $detected_dir" >&2
+      echo "$detected_dir"
+      return 0
+    fi
+    
+    # Try session connection
+    pool_path=$(virsh -c qemu:///session pool-dumpxml default 2>/dev/null | grep -oP '(?<=<path>).*(?=</path>)' | head -1)
+    
+    if [[ -n "$pool_path" && -d "$pool_path" ]]; then
+      detected_dir="$pool_path"
+      echo "✓ Detected libvirt images directory from session pool: $detected_dir" >&2
+      echo "$detected_dir"
+      return 0
+    fi
+    
+    # Try to find any active pool
+    local pools
+    pools=$(virsh -c qemu:///system pool-list --all 2>/dev/null | awk 'NR>2 {print $1}')
+    for pool in $pools; do
+      pool_path=$(virsh -c qemu:///system pool-dumpxml "$pool" 2>/dev/null | grep -oP '(?<=<path>).*(?=</path>)' | head -1)
+      if [[ -n "$pool_path" && -d "$pool_path" ]]; then
+        detected_dir="$pool_path"
+        echo "✓ Detected libvirt images directory from pool '$pool': $detected_dir" >&2
+        echo "$detected_dir"
+        return 0
+      fi
+    done
+  fi
+  
+  # Method 2: Check libvirt configuration files
+  if [[ -f /etc/libvirt/storage/default.xml ]]; then
+    local pool_path
+    pool_path=$(grep -oP '(?<=<path>).*(?=</path>)' /etc/libvirt/storage/default.xml 2>/dev/null | head -1)
+    if [[ -n "$pool_path" && -d "$pool_path" ]]; then
+      detected_dir="$pool_path"
+      echo "✓ Detected libvirt images directory from config: $detected_dir" >&2
+      echo "$detected_dir"
+      return 0
+    fi
+  fi
+  
+  # Method 3: Check distro-specific default
+  distro_info=$(detect_distro 2>/dev/null)
+  if [[ $? -eq 0 ]]; then
+    distro=$(echo "$distro_info" | cut -d'|' -f1)
+    
+    if [[ -n "${DISTRO_DIRS[$distro]}" ]]; then
+      detected_dir="${DISTRO_DIRS[$distro]}"
+      if [[ -d "$detected_dir" ]]; then
+        echo "✓ Using distro default directory for $distro: $detected_dir" >&2
+        echo "$detected_dir"
+        return 0
+      fi
+    fi
+  fi
+  
+  # Method 4: Check common locations
+  local common_dirs=(
+    "/var/lib/libvirt/images"
+    "/var/lib/libvirt/storage"
+    "$HOME/.local/share/libvirt/images"
+    "$HOME/libvirt/images"
+  )
+  
+  for dir in "${common_dirs[@]}"; do
+    if [[ -d "$dir" ]]; then
+      detected_dir="$dir"
+      echo "✓ Found libvirt images directory at: $detected_dir" >&2
+      echo "$detected_dir"
+      return 0
     fi
   done
   
-  # Check gum
-  if [[ ! -x "$GUM_BIN" ]]; then
-    echo "⚠️  gum not found at $GUM_BIN"
-    read -p "Install gum now? (y/n): " install_gum
-    if [[ "${install_gum,,}" == "y" ]]; then
-      echo "Downloading gum..."
-      mkdir -p "$(dirname "$GUM_BIN")"
-      curl -sSfL https://github.com/charmbracelet/gum/releases/download/v0.14.1/gum_0.14.1_Linux_x86_64.tar.gz -o /tmp/gum.tar.gz
-      tar -xzf /tmp/gum.tar.gz -C /tmp
-      mv /tmp/gum_0.14.1_Linux_x86_64/gum "$GUM_BIN"
-      chmod +x "$GUM_BIN"
-      rm -rf /tmp/gum.tar.gz /tmp/gum_0.14.1_Linux_x86_64
-      echo "✓ gum installed successfully"
-    else
-      echo "Cannot continue without gum. Exiting."
-  exit 1
-fi
+  # Method 5: Fallback to default
+  detected_dir="/var/lib/libvirt/images"
+  echo "⚠️  Could not detect libvirt images directory, using default: $detected_dir" >&2
+  echo "$detected_dir"
+  return 0
+}
+
+# Initialize and save libvirt images directory
+init_libvirt_dir() {
+  # Check if already saved and valid
+  if [[ -n "$DISK_DIR" && -d "$DISK_DIR" ]]; then
+    return 0
   fi
   
-  if [ ${#missing[@]} -gt 0 ]; then
-    echo "⚠️  Missing packages: ${missing[*]}"
-    read -p "Install missing packages now? (requires sudo) (y/n): " install_deps
-    if [[ "${install_deps,,}" == "y" ]]; then
-      sudo apt-get update
-      sudo apt-get install -y "${missing[@]}"
-      echo "✓ Dependencies installed successfully"
+  # Detect the directory (suppress output from detect function)
+  local new_disk_dir
+  new_disk_dir=$(detect_libvirt_images_dir 2>/dev/null)
+  
+  if [[ -n "$new_disk_dir" ]]; then
+    DISK_DIR="$new_disk_dir"
+    
+    # Save to settings file
+    if [[ -f "$SETTINGS_FILE" ]]; then
+      # Update existing setting
+      if grep -q "^DISK_DIR=" "$SETTINGS_FILE"; then
+        sed -i "s|^DISK_DIR=.*|DISK_DIR=\"$DISK_DIR\"|" "$SETTINGS_FILE"
+      else
+        echo "DISK_DIR=\"$DISK_DIR\"" >> "$SETTINGS_FILE"
+      fi
     else
-      echo "Warning: Some features may not work without required packages."
-      sleep 2
+      # Create new settings file
+      cat > "$SETTINGS_FILE" << EOF
+# VIRT SPINNER Settings - Auto-generated
+# This file is sourced by spinner.sh to persist configuration
+
+# Detected libvirt images directory
+DISK_DIR="$DISK_DIR"
+EOF
     fi
   fi
 }
 
+# Distro detection function
+detect_distro() {
+  local distro=""
+  local distro_family=""
+  local pkg_manager=""
+  
+  # Try /etc/os-release first (most modern distros)
+  if [[ -f /etc/os-release ]]; then
+    source /etc/os-release
+    distro="${ID:-unknown}"
+    distro_family="${ID_LIKE:-$distro}"
+    
+    # Handle specific distros and their families
+    case "$distro" in
+      ubuntu|debian|linuxmint|pop|elementary|zorin|kali|parrot|mx|deepin)
+        pkg_manager="apt"
+        ;;
+      nobara|fedora|rhel|centos|rocky|alma|oracle)
+        pkg_manager="dnf"
+        [[ ! -x "$(command -v dnf)" && -x "$(command -v yum)" ]] && pkg_manager="yum"
+        ;;
+      arch|manjaro|endeavouros|garuda|artix|omarchy|cachyos|crystal)
+        pkg_manager="pacman"
+        ;;
+      opensuse*|sles|sled)
+        pkg_manager="zypper"
+        ;;
+      void)
+        pkg_manager="xbps"
+        ;;
+      alpine)
+        pkg_manager="apk"
+        ;;
+      gentoo|funtoo)
+        pkg_manager="emerge"
+        ;;
+      solus)
+        pkg_manager="eopkg"
+        ;;
+      nixos)
+        pkg_manager="nix"
+        ;;
+      clearlinux)
+        pkg_manager="swupd"
+        ;;
+      mageia)
+        pkg_manager="urpmi"
+        ;;
+      slackware)
+        pkg_manager="slackpkg"
+        ;;
+      *)
+        # Try to guess based on ID_LIKE
+        if [[ "$distro_family" == *"debian"* ]] || [[ "$distro_family" == *"ubuntu"* ]]; then
+          pkg_manager="apt"
+        elif [[ "$distro_family" == *"fedora"* ]] || [[ "$distro_family" == *"rhel"* ]]; then
+          pkg_manager="dnf"
+          [[ ! -x "$(command -v dnf)" && -x "$(command -v yum)" ]] && pkg_manager="yum"
+        elif [[ "$distro_family" == *"arch"* ]]; then
+          pkg_manager="pacman"
+        elif [[ "$distro_family" == *"suse"* ]]; then
+          pkg_manager="zypper"
+        fi
+        ;;
+    esac
+  fi
+  
+  # Fallback detection if /etc/os-release doesn't exist or didn't work
+  if [[ -z "$pkg_manager" ]]; then
+    if command -v apt-get &>/dev/null; then
+      pkg_manager="apt"
+      distro="debian-based"
+    elif command -v dnf &>/dev/null; then
+      pkg_manager="dnf"
+      distro="fedora-based"
+    elif command -v yum &>/dev/null; then
+      pkg_manager="yum"
+      distro="rhel-based"
+    elif command -v pacman &>/dev/null; then
+      pkg_manager="pacman"
+      distro="arch-based"
+    elif command -v zypper &>/dev/null; then
+      pkg_manager="zypper"
+      distro="suse-based"
+    elif command -v xbps-install &>/dev/null; then
+      pkg_manager="xbps"
+      distro="void"
+    elif command -v apk &>/dev/null; then
+      pkg_manager="apk"
+      distro="alpine"
+    elif command -v emerge &>/dev/null; then
+      pkg_manager="emerge"
+      distro="gentoo"
+    elif command -v eopkg &>/dev/null; then
+      pkg_manager="eopkg"
+      distro="solus"
+    elif command -v nix-env &>/dev/null; then
+      pkg_manager="nix"
+      distro="nixos"
+    elif command -v swupd &>/dev/null; then
+      pkg_manager="swupd"
+      distro="clearlinux"
+    else
+      echo "❌ Unable to detect package manager!"
+      return 1
+    fi
+  fi
+  
+  echo "$distro|$pkg_manager"
+}
+
+# Check if a package is installed
+is_package_installed() {
+  local pkg="$1"
+  local pkg_manager="$2"
+  
+  case "$pkg_manager" in
+    apt)
+      dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"
+      ;;
+    dnf|yum)
+      rpm -q "$pkg" &>/dev/null
+      ;;
+    pacman)
+      pacman -Qi "$pkg" &>/dev/null
+      ;;
+    zypper)
+      rpm -q "$pkg" &>/dev/null
+      ;;
+    xbps)
+      xbps-query "$pkg" &>/dev/null
+      ;;
+    apk)
+      apk info -e "$pkg" &>/dev/null
+      ;;
+    emerge)
+      qlist -I "$pkg" &>/dev/null || equery list "$pkg" &>/dev/null
+      ;;
+    eopkg)
+      eopkg list-installed | grep -q "^$pkg"
+      ;;
+    nix)
+      nix-env -q | grep -q "^$pkg"
+      ;;
+    swupd)
+      swupd bundle-list | grep -q "^$pkg"
+      ;;
+    urpmi)
+      rpm -q "$pkg" &>/dev/null
+      ;;
+    slackpkg)
+      ls /var/log/packages/ | grep -q "^$pkg"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Install packages using the appropriate package manager
+install_packages() {
+  local pkg_manager="$1"
+  shift
+  local packages=("$@")
+  
+  echo "Installing packages using $pkg_manager: ${packages[*]}"
+  
+  case "$pkg_manager" in
+    apt)
+      sudo apt-get update && sudo apt-get install -y "${packages[@]}"
+      ;;
+    dnf)
+      sudo dnf install -y "${packages[@]}"
+      ;;
+    yum)
+      sudo yum install -y "${packages[@]}"
+      ;;
+    pacman)
+      sudo pacman -Sy --noconfirm "${packages[@]}"
+      ;;
+    zypper)
+      sudo zypper install -y "${packages[@]}"
+      ;;
+    xbps)
+      sudo xbps-install -Sy "${packages[@]}"
+      ;;
+    apk)
+      sudo apk add --no-cache "${packages[@]}"
+      ;;
+    emerge)
+      sudo emerge --ask=n "${packages[@]}"
+      ;;
+    eopkg)
+      sudo eopkg install -y "${packages[@]}"
+      ;;
+    nix)
+      nix-env -iA "${packages[@]}"
+      ;;
+    swupd)
+      sudo swupd bundle-add "${packages[@]}"
+      ;;
+    urpmi)
+      sudo urpmi --auto "${packages[@]}"
+      ;;
+    slackpkg)
+      sudo slackpkg install "${packages[@]}"
+      ;;
+    *)
+      echo "❌ Unsupported package manager: $pkg_manager"
+      return 1
+      ;;
+  esac
+}
+
+# Map package names to distro-specific equivalents
+map_package_name() {
+  local pkg="$1"
+  local pkg_manager="$2"
+  
+  # Return the appropriate package name for the distro
+  case "$pkg_manager" in
+    pacman)
+      # Arch-specific package name mappings
+      case "$pkg" in
+        libvirt-clients) echo "libvirt" ;;
+        qemu-utils) echo "qemu-base" ;;
+        virt-manager) echo "virt-manager" ;;
+        net-tools) echo "net-tools" ;;
+        *) echo "$pkg" ;;
+      esac
+      ;;
+    dnf|yum)
+      # Fedora/RHEL-specific mappings
+      case "$pkg" in
+        libvirt-clients) echo "libvirt-client" ;;
+        qemu-utils) echo "qemu-img" ;;
+        virt-manager) echo "virt-manager" ;;
+        net-tools) echo "net-tools" ;;
+        *) echo "$pkg" ;;
+      esac
+      ;;
+    zypper)
+      # openSUSE-specific mappings
+      case "$pkg" in
+        libvirt-clients) echo "libvirt-client" ;;
+        qemu-utils) echo "qemu-tools" ;;
+        *) echo "$pkg" ;;
+      esac
+      ;;
+    apk)
+      # Alpine-specific mappings
+      case "$pkg" in
+        libvirt-clients) echo "libvirt-client" ;;
+        qemu-utils) echo "qemu-img" ;;
+        virt-manager) echo "virt-manager" ;;
+        *) echo "$pkg" ;;
+      esac
+      ;;
+    *)
+      # Default: return original name
+      echo "$pkg"
+      ;;
+  esac
+}
+
+# Check and install dependencies
+check_dependencies() {
+  local missing=()
+  local is_first_run=false
+  
+  # Check if this is first run (settings file was just created)
+  if [[ -f "$SETTINGS_FILE" ]] && grep -q "FIRST_RUN_DONE=true" "$SETTINGS_FILE"; then
+    is_first_run=true
+  fi
+  
+  # Detect distro and package manager
+  echo "📦 [1/4] Detecting Your System..."
+  
+  local distro_info pkg_manager distro
+  distro_info=$(detect_distro)
+  if [[ $? -ne 0 ]]; then
+    echo "❌ Could not detect distribution. Please install manually: ${REQUIRED_PACKAGES[*]}"
+    return 1
+  fi
+  
+  distro=$(echo "$distro_info" | cut -d'|' -f1)
+  pkg_manager=$(echo "$distro_info" | cut -d'|' -f2)
+  
+  echo "   ✅ $distro | $pkg_manager"
+  
+  # Check system packages
+  echo ""
+  echo "📋 [2/4] Checking Packages..."
+  
+  local installed_count=0
+  for pkg in "${REQUIRED_PACKAGES[@]}"; do
+    local mapped_pkg
+    mapped_pkg=$(map_package_name "$pkg" "$pkg_manager")
+    
+    if is_package_installed "$mapped_pkg" "$pkg_manager"; then
+      ((installed_count++))
+    else
+      missing+=("$mapped_pkg")
+    fi
+  done
+  
+  echo "   ✅ $installed_count/${#REQUIRED_PACKAGES[@]} already installed"
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "   📦 Missing: ${missing[*]}"
+  fi
+  echo ""
+  
+  # Check gum
+  if [[ ! -x "$GUM_BIN" ]]; then
+    echo "📥 [3/4] Installing gum toolkit..."
+    
+    if [[ "$is_first_run" == true ]]; then
+      mkdir -p "$(dirname "$GUM_BIN")"
+      if curl -sSfL https://github.com/charmbracelet/gum/releases/download/v0.14.1/gum_0.14.1_Linux_x86_64.tar.gz -o /tmp/gum.tar.gz 2>/dev/null; then
+        tar -xzf /tmp/gum.tar.gz -C /tmp 2>/dev/null
+        mv /tmp/gum_0.14.1_Linux_x86_64/gum "$GUM_BIN"
+        chmod +x "$GUM_BIN"
+        rm -rf /tmp/gum.tar.gz /tmp/gum_0.14.1_Linux_x86_64
+        echo "   ✅ gum installed"
+      else
+        echo "   ❌ Failed to download gum"
+      fi
+    else
+      read -p "   Install gum now? (y/n): " install_gum
+      if [[ "${install_gum,,}" == "y" ]]; then
+        mkdir -p "$(dirname "$GUM_BIN")"
+        curl -sSfL https://github.com/charmbracelet/gum/releases/download/v0.14.1/gum_0.14.1_Linux_x86_64.tar.gz -o /tmp/gum.tar.gz 2>/dev/null
+        tar -xzf /tmp/gum.tar.gz -C /tmp 2>/dev/null
+        mv /tmp/gum_0.14.1_Linux_x86_64/gum "$GUM_BIN"
+        chmod +x "$GUM_BIN"
+        rm -rf /tmp/gum.tar.gz /tmp/gum_0.14.1_Linux_x86_64
+        echo "   ✅ gum installed"
+      else
+        echo "   ❌ Cannot continue without gum. Exiting."
+        exit 1
+      fi
+    fi
+    echo ""
+  fi
+  
+  # Install missing packages
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "🔧 [4/4] Installing Packages..."
+    echo "   📦 ${missing[*]}"
+    echo ""
+    
+    if [[ "$is_first_run" == true ]]; then
+      echo "   ⏳ Installing via $pkg_manager (this may take a few minutes)..."
+      install_packages "$pkg_manager" "${missing[@]}"
+      if [[ $? -eq 0 ]]; then
+        echo "   ✅ All packages installed!"
+      else
+        echo "   ⚠️  Some packages failed - install manually later"
+      fi
+    else
+      read -p "   Install missing packages now? (requires sudo) (y/n): " install_deps
+      if [[ "${install_deps,,}" == "y" ]]; then
+        install_packages "$pkg_manager" "${missing[@]}"
+        [[ $? -eq 0 ]] && echo "   ✅ Installed" || echo "   ❌ Failed"
+      else
+        echo "   ⚠️  Skipped - some features may not work"
+      fi
+    fi
+    echo ""
+  fi
+}
+
+# Check if this is the first run and show welcome screen
+check_first_run
+
 # Run dependency check on startup
 check_dependencies
+
+# Initialize and detect libvirt images directory
+init_libvirt_dir
+
+# Show completion message for first run
+show_setup_complete() {
+  if [[ -f "$SETTINGS_FILE" ]] && grep -q "FIRST_RUN_DONE=true" "$SETTINGS_FILE"; then
+    # Check if we need to mark setup as complete
+    if ! grep -q "SETUP_COMPLETE=true" "$SETTINGS_FILE"; then
+      echo ""
+      echo "🎉 Setup Complete! VIRT SPINNER is ready."
+      echo "   Config: $SETTINGS_FILE | VM Images: $DISK_DIR"
+      echo ""
+      echo "🚀 Launching in 2 seconds..."
+      
+      # Mark setup as complete
+      echo "SETUP_COMPLETE=true" >> "$SETTINGS_FILE"
+      
+      sleep 2
+      clear
+    fi
+  fi
+}
+
+show_setup_complete
 
 run_with_spinner() {
   local title="$1"
@@ -2676,7 +3259,7 @@ LOGO
   # Join panels side by side
   gum join --horizontal "$left_panel" "  " "$right_panel"
   
-  gum style --foreground 8 "by Lefteris Iliadis (me@lefteros.com)"
+  gum style --foreground 8 "by $AUTHOR_NAME ($AUTHOR_EMAIL)"
   gum style --foreground 8 --italic "a project made with help of Cursor.ai"
   echo
   
