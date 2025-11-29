@@ -2123,7 +2123,7 @@ clone_vm() {
   
   # Get new VM name
   set +e
-  new_vm_name=$(gum input --placeholder "Enter new VM name" --prompt "New VM name: " 2>/dev/null)
+  new_vm_name=$(gum input --placeholder "Enter new VM name" --prompt "New VM name: ")
   local input_result=$?
   set -e
   if [[ $input_result -ne 0 ]]; then
@@ -2907,7 +2907,7 @@ create_new_vm() {
   
   # VM Name (with cancellation handling)
   set +e
-  vm_name=$(gum input --placeholder "Enter VM name" --prompt "VM Name: " 2>/dev/null)
+  vm_name=$(gum input --placeholder "Enter VM name" --prompt "VM Name: ")
   local input_result=$?
   set -e
   
@@ -2933,7 +2933,7 @@ create_new_vm() {
   # OS Variant
   gum style --foreground 8 "Common OS variants: win11, win10, debian12, ubuntu24.04, rhel9, generic"
   set +e
-  os_variant=$(gum input --placeholder "e.g., win11, debian12, generic" --prompt "OS Variant: " --value "generic" 2>/dev/null)
+  os_variant=$(gum input --placeholder "e.g., win11, debian12, generic" --prompt "OS Variant: " --value "generic")
   input_result=$?
   set -e
   if [[ $input_result -ne 0 ]]; then
@@ -2944,7 +2944,7 @@ create_new_vm() {
   
   # Memory (MB)
   set +e
-  memory=$(gum input --placeholder "Memory in MB (e.g., 4096)" --prompt "Memory (MB): " --value "4096" 2>/dev/null)
+  memory=$(gum input --placeholder "Memory in MB (e.g., 4096)" --prompt "Memory (MB): " --value "4096")
   input_result=$?
   set -e
   if [[ $input_result -ne 0 ]]; then
@@ -2961,7 +2961,7 @@ create_new_vm() {
   
   # vCPUs
   set +e
-  vcpus=$(gum input --placeholder "Number of vCPUs (e.g., 4)" --prompt "vCPUs: " --value "4" 2>/dev/null)
+  vcpus=$(gum input --placeholder "Number of vCPUs (e.g., 4)" --prompt "vCPUs: " --value "4")
   input_result=$?
   set -e
   if [[ $input_result -ne 0 ]]; then
@@ -2985,7 +2985,7 @@ create_new_vm() {
   
   # Primary Disk
   set +e
-  disk_size=$(gum input --placeholder "Disk size in GB (e.g., 100)" --prompt "Primary Disk Size (GB): " --value "100" 2>/dev/null)
+  disk_size=$(gum input --placeholder "Disk size in GB (e.g., 100)" --prompt "Primary Disk Size (GB): " --value "100")
   input_result=$?
   set -e
   if [[ $input_result -ne 0 ]]; then
@@ -3011,7 +3011,7 @@ create_new_vm() {
   add_second_disk=false
   if gum confirm "Add a second disk?"; then
     set +e
-    second_disk_size=$(gum input --placeholder "Second disk size in GB" --prompt "Second Disk Size (GB): " 2>/dev/null)
+    second_disk_size=$(gum input --placeholder "Second disk size in GB" --prompt "Second Disk Size (GB): ")
     input_result=$?
     set -e
     if [[ $input_result -ne 0 ]]; then
@@ -3371,7 +3371,7 @@ create_new_vm() {
     if gum confirm "Set VNC password?"; then
       while true; do
         set +e
-        vnc_password=$(gum input --placeholder "VNC password (max 8 chars)" --password --prompt "VNC Password: " 2>/dev/null)
+        vnc_password=$(gum input --placeholder "VNC password (max 8 chars)" --password --prompt "VNC Password: ")
         input_result=$?
         set -e
         if [[ $input_result -ne 0 ]]; then
@@ -3399,7 +3399,7 @@ create_new_vm() {
   elif [[ "$graphics_type" == "spice" ]]; then
     if gum confirm "Set SPICE password?"; then
       set +e
-      spice_password=$(gum input --placeholder "SPICE password" --password --prompt "SPICE Password: " 2>/dev/null)
+      spice_password=$(gum input --placeholder "SPICE password" --password --prompt "SPICE Password: ")
       input_result=$?
       set -e
       if [[ $input_result -ne 0 ]]; then
@@ -3438,7 +3438,7 @@ create_new_vm() {
       ;;
     "bridge"*)
       set +e
-      bridge_name=$(gum input --placeholder "Bridge name (e.g., br0)" --prompt "Bridge: " --value "br0" 2>/dev/null)
+      bridge_name=$(gum input --placeholder "Bridge name (e.g., br0)" --prompt "Bridge: " --value "br0")
       input_result=$?
       set -e
       if [[ $input_result -ne 0 ]]; then
