@@ -3073,6 +3073,34 @@ create_new_vm() {
   
   if [[ "$firmware_type" =~ ^UEFI ]]; then
     firmware="uefi"
+    
+    # Check if OVMF firmware is available
+    local ovmf_found=false
+    for path in \
+      "/usr/share/OVMF/OVMF_CODE.secboot.fd" \
+      "/usr/share/OVMF/OVMF_CODE.fd" \
+      "/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd" \
+      "/usr/share/edk2/ovmf/OVMF_CODE.fd" \
+      "/usr/share/qemu/ovmf-x64/OVMF_CODE.fd"; do
+      if [[ -f "$path" ]]; then
+        ovmf_found=true
+        break
+      fi
+    done
+    
+    if [[ "$ovmf_found" == false ]]; then
+      gum style --foreground 3 "⚠️  Warning: OVMF firmware not found in common locations."
+      gum style --foreground 8 "   UEFI boot may not work. Install OVMF package:"
+      gum style --foreground 8 "   - Fedora/Nobara: sudo dnf install edk2-ovmf"
+      gum style --foreground 8 "   - Debian/Ubuntu: sudo apt install ovmf"
+      gum style --foreground 8 "   - Arch: sudo pacman -S edk2-ovmf"
+      echo ""
+      if ! gum confirm "Continue with UEFI anyway? (may fail during VM creation)"; then
+        gum style --foreground 3 "✗ VM creation cancelled."
+        read -p "Press Enter to continue..."
+        return
+      fi
+    fi
   else
     firmware="bios"
   fi
@@ -3686,9 +3714,13 @@ create_new_vm() {
     # Escape the ISO path properly for eval
     local escaped_iso="${first_iso//\"/\\\"}"
     virt_cmd="$virt_cmd --cdrom \"$escaped_iso\""
+    
     if [[ "$firmware" == "uefi" ]]; then
+      # For UEFI: combine uefi firmware with boot order
+      # This enables UEFI and sets CDROM as first boot device
       virt_cmd="$virt_cmd --boot uefi,cdrom,hd,menu=on"
     else
+      # BIOS: standard boot order
       virt_cmd="$virt_cmd --boot cdrom,hd,menu=on"
     fi
   else
