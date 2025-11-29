@@ -552,6 +552,9 @@ map_package_name() {
 
 # Check and install dependencies
 check_dependencies() {
+  # Temporarily disable errexit since package checks return non-zero for missing packages
+  set +e
+  
   local missing=()
   local is_first_run=false
   
@@ -584,14 +587,12 @@ check_dependencies() {
     local mapped_pkg
     mapped_pkg=$(map_package_name "$pkg" "$pkg_manager")
     
-    # Check if package is installed (disable errexit temporarily for this check)
-    set +e
+    # Check if package is installed
     is_package_installed "$mapped_pkg" "$pkg_manager" 2>/dev/null
     local pkg_installed=$?
-    set -e
     
     if [ $pkg_installed -eq 0 ]; then
-      ((installed_count++))
+      installed_count=$((installed_count + 1))
     else
       missing+=("$mapped_pkg")
     fi
@@ -661,6 +662,9 @@ check_dependencies() {
     fi
     echo ""
   fi
+  
+  # Re-enable errexit
+  set -e
 }
 
 # Check if this is the first run and show welcome screen
