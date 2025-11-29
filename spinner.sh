@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Version and Author Info
-VERSION="1.1"
+VERSION="1.3"
 AUTHOR_NAME="Lefteris Iliadis"
 AUTHOR_EMAIL="me@lefteros.com"
 
@@ -1132,21 +1132,34 @@ settings_menu() {
 }
 
 prompt_orphan_cleanup() {
-  local images_dir="/var/lib/libvirt/images"
+  # Use detected DISK_DIR instead of hardcoded path
+  local images_dir="${DISK_DIR:-/var/lib/libvirt/images}"
   local -a all_images=()
   local -a used_images=()
   local -a orphaned_images=()
 
-  # Get all disk images in the directory
+  # Check if directory exists
+  if ! sudo test -d "$images_dir" 2>/dev/null; then
+    gum style --foreground 3 "⚠️  Directory $images_dir does not exist."
+    return
+  fi
+
+  # Get all disk images in the directory (all common formats)
+  gum style --foreground 8 "Scanning $images_dir for disk images..."
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
-    [[ "$line" == *.qcow2 ]] && all_images+=("$line")
-  done < <(sudo ls "$images_dir" 2>/dev/null || true)
+    # Check for common disk image formats
+    if [[ "$line" == *.qcow2 ]] || [[ "$line" == *.qcow ]] || [[ "$line" == *.img ]] || [[ "$line" == *.raw ]]; then
+      all_images+=("$line")
+    fi
+  done < <(sudo ls -1 "$images_dir" 2>/dev/null || true)
 
   if [ ${#all_images[@]} -eq 0 ]; then
     gum style --foreground 2 "✓ No disk images found in $images_dir."
     return
   fi
+
+  gum style --foreground 8 "Found ${#all_images[@]} disk image file(s) in directory."
 
   # Get all disk images currently used by VMs (both session and system)
   gum style --foreground 8 "Scanning VMs for disk usage..."
@@ -1156,10 +1169,20 @@ prompt_orphan_cleanup() {
     [[ -z "$vm" ]] && continue
     while IFS= read -r disk; do
       [[ -z "$disk" || "$disk" == "-" ]] && continue
+      # Extract filename from path (handles both absolute and relative paths)
       local basename_disk
       basename_disk=$(basename "$disk" 2>/dev/null)
-      used_images+=("$basename_disk")
-    done < <(virsh -c "$SESSION_URI" domblklist "$vm" 2>/dev/null | awk 'NR>2 && $2 ~ /\.qcow2$/ {print $2}')
+      # Also check if the full path matches our images_dir
+      if [[ "$disk" == "$images_dir"/* ]]; then
+        used_images+=("$basename_disk")
+      elif [[ "$disk" == *"/"* ]]; then
+        # Full path - extract basename
+        used_images+=("$basename_disk")
+      else
+        # Just filename
+        used_images+=("$disk")
+      fi
+    done < <(virsh -c "$SESSION_URI" domblklist "$vm" 2>/dev/null | awk 'NR>2 && $2 != "" && $2 != "-" {print $2}')
   done < <(virsh -c "$SESSION_URI" list --all --name 2>/dev/null | sed '/^$/d')
   
   # System VMs
@@ -1167,11 +1190,37 @@ prompt_orphan_cleanup() {
     [[ -z "$vm" ]] && continue
     while IFS= read -r disk; do
       [[ -z "$disk" || "$disk" == "-" ]] && continue
+      # Extract filename from path (handles both absolute and relative paths)
       local basename_disk
       basename_disk=$(basename "$disk" 2>/dev/null)
-      used_images+=("$basename_disk")
-    done < <(sudo virsh -c "$SYSTEM_URI" domblklist "$vm" 2>/dev/null | awk 'NR>2 && $2 ~ /\.qcow2$/ {print $2}')
+      # Also check if the full path matches our images_dir
+      if [[ "$disk" == "$images_dir"/* ]]; then
+        used_images+=("$basename_disk")
+      elif [[ "$disk" == *"/"* ]]; then
+        # Full path - extract basename
+        used_images+=("$basename_disk")
+      else
+        # Just filename
+        used_images+=("$disk")
+      fi
+    done < <(sudo virsh -c "$SYSTEM_URI" domblklist "$vm" 2>/dev/null | awk 'NR>2 && $2 != "" && $2 != "-" {print $2}')
   done < <(sudo virsh -c "$SYSTEM_URI" list --all --name 2>/dev/null | sed '/^$/d')
+
+  # Remove duplicates from used_images
+  local -a unique_used=()
+  for used in "${used_images[@]}"; do
+    local is_duplicate=false
+    for unique in "${unique_used[@]}"; do
+      if [[ "$used" == "$unique" ]]; then
+        is_duplicate=true
+        break
+      fi
+    done
+    if [[ "$is_duplicate" == false ]]; then
+      unique_used+=("$used")
+    fi
+  done
+  used_images=("${unique_used[@]}")
 
   # Find orphaned images (in directory but not used by any VM)
   for img in "${all_images[@]}"; do
@@ -2031,6 +2080,82 @@ run_diagnostics() {
   echo
   gum style --bold "Orphaned Disk Check:"
   prompt_orphan_cleanup
+}
+
+# Function to connect to VM console (VNC or SPICE)
+connect_to_console() {
+  local vm_name="$1"
+  local conn_uri="$2"
+  
+  # Check if VM is running
+  local vm_state=$(virsh -c "$conn_uri" domstate "$vm_name" 2>/dev/null || echo "unknown")
+  if [[ "$vm_state" != "running" ]]; then
+    gum style --foreground 3 "⚠️  VM must be running to connect to console."
+    gum style --foreground 8 "Current state: $vm_state"
+    read -p "Press Enter to continue..."
+    return 1
+  fi
+  
+  # Try to detect graphics type
+  local vnc_display=$(virsh -c "$conn_uri" vncdisplay "$vm_name" 2>/dev/null | tr -d '\r' || echo "")
+  local spice_display=$(virsh -c "$conn_uri" domdisplay "$vm_name" 2>/dev/null | tr -d '\r' || echo "")
+  
+  # Check if virt-viewer is available
+  if ! command -v virt-viewer &>/dev/null; then
+    gum style --foreground 1 "✗ virt-viewer is not installed."
+    gum style --foreground 8 "Install it with:"
+    gum style --foreground 8 "  sudo dnf install virt-viewer    (Fedora/Nobara)"
+    gum style --foreground 8 "  sudo apt install virt-viewer    (Debian/Ubuntu)"
+    gum style --foreground 8 "  sudo pacman -S virt-viewer      (Arch)"
+    read -p "Press Enter to continue..."
+    return 1
+  fi
+  
+  # Launch appropriate viewer
+  if [[ -n "$spice_display" ]]; then
+    # SPICE console
+    gum style --foreground 2 "🖥️  Connecting to SPICE console..."
+    gum style --foreground 8 "Display: $spice_display"
+    echo ""
+    gum style --foreground 6 "💡 Tip: Close the console window to return to the menu"
+    echo ""
+    sleep 1
+    virt-viewer --connect "$conn_uri" --wait "$vm_name" 2>/dev/null || {
+      # Fallback: try with display URI directly
+      virt-viewer "$spice_display" 2>/dev/null || {
+        gum style --foreground 1 "✗ Failed to connect to SPICE console."
+        gum style --foreground 8 "Try manually: virt-viewer --connect $conn_uri $vm_name"
+        read -p "Press Enter to continue..."
+        return 1
+      }
+    }
+  elif [[ -n "$vnc_display" ]]; then
+    # VNC console
+    local vnc_num=${vnc_display#:}
+    local vnc_port=$((5900 + vnc_num))
+    gum style --foreground 2 "🖥️  Connecting to VNC console..."
+    gum style --foreground 8 "VNC Display: $vnc_display (port $vnc_port)"
+    echo ""
+    gum style --foreground 6 "💡 Tip: Close the console window to return to the menu"
+    echo ""
+    sleep 1
+    virt-viewer --connect "$conn_uri" --wait "$vm_name" 2>/dev/null || {
+      gum style --foreground 1 "✗ Failed to connect to VNC console."
+      gum style --foreground 8 "Try manually: virt-viewer --connect $conn_uri $vm_name"
+      read -p "Press Enter to continue..."
+      return 1
+    }
+  else
+    # No graphics configured
+    gum style --foreground 3 "⚠️  No graphics console available for this VM."
+    gum style --foreground 8 "This VM may be configured as headless (no graphics)."
+    gum style --foreground 8 "You can connect via SSH or serial console instead."
+    read -p "Press Enter to continue..."
+    return 1
+  fi
+  
+  gum style --foreground 2 "✓ Console session ended."
+  sleep 1
 }
 
 show_vm_info() {
@@ -3856,6 +3981,9 @@ create_new_vm() {
   if [[ $vm_creation_result -eq 0 ]]; then
     gum style --foreground 2 "✓ VM '$vm_name' created successfully!"
     
+    # Disable exit on error for post-creation operations to ensure we return to menu
+    set +e
+    
     # Configure UEFI boot order if needed
     if [[ "$firmware" == "uefi" && -n "$first_iso" ]]; then
       # For UEFI, ensure CDROM is first in boot order
@@ -3879,16 +4007,16 @@ create_new_vm() {
       fi
     fi
     
-    # Gather display info
-    host_ip=$(hostname -I | awk '{print $1}')
-    vnc_display=$(virsh -c "$SYSTEM_URI" vncdisplay "$vm_name" 2>/dev/null | tr -d '\r')
+    # Gather display info (with error handling)
+    host_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
+    vnc_display=$(virsh -c "$SYSTEM_URI" vncdisplay "$vm_name" 2>/dev/null | tr -d '\r' || echo "")
     display_info="Graphics: none"
     if [[ -n "$vnc_display" ]]; then
       vnc_num=${vnc_display#:}
       vnc_port=$((5900 + vnc_num))
       display_info="VNC: connect to ${host_ip}${vnc_display} (tcp port $vnc_port)"
     else
-      spice_display=$(virsh -c "$SYSTEM_URI" domdisplay "$vm_name" 2>/dev/null | tr -d '\r')
+      spice_display=$(virsh -c "$SYSTEM_URI" domdisplay "$vm_name" 2>/dev/null | tr -d '\r' || echo "")
       if [[ -n "$spice_display" ]]; then
         display_info="Display: $spice_display"
       fi
@@ -3896,11 +4024,11 @@ create_new_vm() {
     
     network_info=""
     if [[ "$network_mode" == "bridge" ]]; then
-      mac_addr=$(virsh -c "$SYSTEM_URI" domiflist "$vm_name" 2>/dev/null | awk 'NR>2 && $1 != "" {print $5; exit}')
+      mac_addr=$(virsh -c "$SYSTEM_URI" domiflist "$vm_name" 2>/dev/null | awk 'NR>2 && $1 != "" {print $5; exit}' || echo "")
       guest_ip=""
       if [[ -n "$mac_addr" ]]; then
         for attempt in {1..15}; do
-          guest_ip=$(ip neigh show | awk -v mac="$mac_addr" 'tolower($5)==tolower(mac){print $1; exit}')
+          guest_ip=$(ip neigh show 2>/dev/null | awk -v mac="$mac_addr" 'tolower($5)==tolower(mac){print $1; exit}' || echo "")
           if [[ -n "$guest_ip" ]]; then
             break
           fi
@@ -3920,7 +4048,7 @@ create_new_vm() {
     
     gum style --border rounded --padding "0 1" --margin "1 0" \
       "$display_info" \
-      "$network_info"
+      "$network_info" 2>/dev/null || true
     
     # Refresh VM list
     VM_NAMES=()
@@ -3928,8 +4056,11 @@ create_new_vm() {
     VM_LABELS=()
     VM_STATES=()
     VM_SEEN=()
-    append_vms "$SESSION_URI" "session"
-    append_vms "$SYSTEM_URI" "system"
+    append_vms "$SESSION_URI" "session" 2>/dev/null || true
+    append_vms "$SYSTEM_URI" "system" 2>/dev/null || true
+    
+    # Re-enable exit on error
+    set -e
   else
     # Check if 3D acceleration was enabled and provide specific guidance
     if [[ "$enable_3d" == true ]]; then
@@ -4166,6 +4297,7 @@ LOGO
     menu_items=("Show VM Info")
     
     if [[ "$current_state" == "running" ]]; then
+      menu_items+=("🖥️  Connect to Console")
       menu_items+=("Pause VM")
       menu_items+=("Restart")
     elif [[ "$current_state" == "paused" ]]; then
@@ -4195,6 +4327,13 @@ LOGO
         show_vm_info "$vm" "$conn"
         gum style --foreground 8 ""
         read -p "Press Enter to continue..."
+        clear
+        gum style --bold --foreground 212 "Selected: $vm [$label]"
+        echo
+        ;;
+      "🖥️  Connect to Console")
+        clear
+        connect_to_console "$vm" "$conn"
         clear
         gum style --bold --foreground 212 "Selected: $vm [$label]"
         echo
