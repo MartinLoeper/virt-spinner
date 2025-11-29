@@ -1,4 +1,4 @@
-# 🎯 Virt SPINNER v1.0
+# 🎯 Virt SPINNER v1.1
 ## 💻 The Professional TUI Alternative to Gnome-Boxes & virt-manager
 
 > **Tired of slow, mouse-heavy GUI tools?** VIRT SPINNER brings full libvirt/QEMU/KVM power to your terminal.  
@@ -7,7 +7,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.0-blue.svg?cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-1.1-blue.svg?cacheSeconds=2592000)
 ![Shell](https://img.shields.io/badge/shell-bash-green.svg)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-Personal-orange.svg)
@@ -513,6 +513,21 @@ Still in terminal, context preserved
 
 ---
 
+## What's New in v1.1
+
+**VIRT SPINNER v1.1** adds firmware selection support, allowing you to choose between UEFI and BIOS when creating VMs.
+
+### 🆕 New in v1.1
+
+- **💾 Firmware Selection** - Choose between UEFI and BIOS (Legacy) when creating VMs
+  - UEFI support for modern operating systems (Windows 10/11, modern Linux)
+  - BIOS/Legacy mode for older systems and maximum compatibility
+  - Context-aware suggestions for each firmware type
+  - Required for Windows 11 installation
+  - Shown in VM summary with proper boot command configuration
+
+---
+
 ## What's New in v1.0
 
 **VIRT SPINNER v1.0** is a complete rewrite with universal Linux distribution support, intelligent ISO management, and enhanced user experience. This version brings professional-grade VM management to any Linux system through an elegant terminal UI.
@@ -687,6 +702,7 @@ All with **clear progress indicators** [1/4], [2/4], etc.
   - **30+ OS variants** (Windows, Linux, BSD) with osinfo-query tip
   - **Memory allocation** with system RAM detection and safe maximums
   - **CPU allocation** with overcommit warnings
+  - **Firmware selection** (UEFI/BIOS) with use-case guidance
   - **Disk sizing** with available space monitoring
   - **TUI ISO browser** with visual directory navigation
   - **Flexible ISO selection** (TUI browse, manual path, or skip)
@@ -745,6 +761,7 @@ All with **clear progress indicators** [1/4], [2/4], etc.
 **Create New VM** - Enhanced wizard with:
 - **Intelligent defaults** calculated from system resources
 - **Resource allocation warnings** prevent over-commitment
+- **Firmware selection** (UEFI or BIOS/Legacy) with guidance
 - **ISO permission handling** ensures VMs boot correctly
 - **Multiple ISO support** (boot + drivers/tools)
 - **Graphics options**: VNC, SPICE, or headless
@@ -847,6 +864,14 @@ Available space in /var/lib/libvirt/images: 500GB
 💡 writeback: Fastest (data cached in host RAM, risk of data loss on host crash)
    writethrough: Balanced (cached reads, direct writes, good compromise)
    none: Safest (no caching, slowest but most secure)
+```
+
+**Firmware Selection:**
+```
+💾 Firmware Type
+💡 UEFI: Modern firmware, supports Secure Boot, required for Windows 11
+   BIOS: Legacy firmware, better compatibility with older systems
+   Tip: Use UEFI for new OSes (Windows 10+, modern Linux), BIOS for older systems
 ```
 
 **Graphics Configuration:**
@@ -1217,6 +1242,13 @@ mkdir -p ~/iso
 
 ## Version History
 
+### v1.1 (2025-11-29) - Firmware Selection
+- 💾 **UEFI/BIOS firmware selection** during VM creation
+- 🎯 **Context-aware firmware guidance** (UEFI for modern OSes, BIOS for legacy)
+- ✅ **Windows 11 support** (requires UEFI firmware)
+- 🔧 **Proper boot command integration** with firmware type
+- 📋 **Firmware display** in VM creation summary
+
 ### v1.0 (2025-11-29) - Universal & Intelligent
 - 🐧 **Universal distro support** (30+ distributions)
 - 📁 **Intelligent path detection** (libvirt & ISO directories)
@@ -1253,6 +1285,8 @@ mkdir -p ~/iso
 
 ## Latest Improvements
 
+- ✅ UEFI/BIOS firmware selection (v1.1)
+- ✅ Windows 11 support with UEFI firmware (v1.1)
 - ✅ Added 3D acceleration support (virtio-gl)
 - ✅ TUI file browser for ISO selection
 - ✅ VNC Console working on Nobara (Fedora 43 fork)
@@ -1356,7 +1390,7 @@ mkdir -p ~/iso
 
 <div align="center">
 
-**VIRT SPINNER v1.0**  
+**VIRT SPINNER v1.1**  
 A project by **Lefteris Iliadis** • [me@lefteros.com](mailto:me@lefteros.com)
 
 ![Made with Love](https://img.shields.io/badge/Made%20with-❤️-red.svg)
