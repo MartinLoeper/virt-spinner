@@ -53,6 +53,28 @@ SETTINGS_FILE="$HOME/.spinner_settings"
 # End Configuration
 #####################################################################
 
+# Save all settings to file (defined early so migration can use it)
+save_settings() {
+  cat > "$SETTINGS_FILE" << EOF
+# VIRT SPINNER Settings - Auto-generated
+# This file is sourced by spinner.sh to persist configuration
+# Settings Version: $VERSION
+# Last Updated: $(date)
+
+SETTINGS_VERSION="$VERSION"
+MONITOR_REFRESH=$MONITOR_REFRESH
+DISK_CACHE="$DISK_CACHE"
+CPU_MODE="$CPU_MODE"
+SNAPSHOT_AUTO_ENABLED=$SNAPSHOT_AUTO_ENABLED
+SNAPSHOT_NAME_TEMPLATE="$SNAPSHOT_NAME_TEMPLATE"
+SNAPSHOT_LIMIT=$SNAPSHOT_LIMIT
+ISO_DIR="$ISO_DIR"
+DISK_DIR="$DISK_DIR"
+SECURE_BOOT_ENABLED=$SECURE_BOOT_ENABLED
+TPM_ENABLED=$TPM_ENABLED
+EOF
+}
+
 # Settings migration and loading
 load_and_migrate_settings() {
   local settings_version=""
@@ -1088,28 +1110,6 @@ live_system_monitor() {
   echo
   gum style --foreground 2 "Exiting monitor..."
   sleep 0.5
-}
-
-# Save all settings to file
-save_settings() {
-  cat > "$SETTINGS_FILE" << EOF
-# VIRT SPINNER Settings - Auto-generated
-# This file is sourced by spinner.sh to persist configuration
-# Settings Version: $VERSION
-# Last Updated: $(date)
-
-SETTINGS_VERSION="$VERSION"
-MONITOR_REFRESH=$MONITOR_REFRESH
-DISK_CACHE="$DISK_CACHE"
-CPU_MODE="$CPU_MODE"
-SNAPSHOT_AUTO_ENABLED=$SNAPSHOT_AUTO_ENABLED
-SNAPSHOT_NAME_TEMPLATE="$SNAPSHOT_NAME_TEMPLATE"
-SNAPSHOT_LIMIT=$SNAPSHOT_LIMIT
-ISO_DIR="$ISO_DIR"
-DISK_DIR="$DISK_DIR"
-SECURE_BOOT_ENABLED=$SECURE_BOOT_ENABLED
-TPM_ENABLED=$TPM_ENABLED
-EOF
 }
 
 # Settings menu
