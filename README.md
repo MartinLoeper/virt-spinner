@@ -192,6 +192,15 @@ The helper script `/home/dietpi/spin-win11.sh` uses the Tiny11 image plus the vi
 
 <img width="626" height="437" alt="image" src="https://github.com/user-attachments/assets/ad37cc54-9fb7-4429-91e3-5f533c97e897" />
 
+## Latest changes
+
+- Added 3d support
+- TUI file picker for ISO's
+- VNC Console, working on Linux Nobara Project Fedora 43 fork
+- and more
+
+<img width="724" height="447" alt="image" src="https://github.com/user-attachments/assets/94bcf8f2-afce-451d-9a3c-2f95ea499291" />
+
 
 ## Quick Start
 1. Ensure libvirtd is running: `sudo systemctl status libvirtd`.
