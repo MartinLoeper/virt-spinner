@@ -3045,15 +3045,25 @@ create_new_vm() {
     
     case "$browse_choice" in
       "TUI file browser (navigate visually)")
-        gum style --foreground 8 "Navigate with arrows, press Enter to select, Ctrl+C to cancel" >&2
+        gum style --foreground 8 "Navigate with arrows, press Enter to select, ESC to cancel" >&2
         gum style --foreground 8 "Starting from: $start_dir" >&2
         echo "" >&2
         
-        # Use gum file to browse
+        # Use gum file to browse (handle cancellation)
         local selected_file
-        selected_file=$(gum file --directory="$start_dir" --file --height=20 2>/dev/null)
+        set +e
+        selected_file=$(gum file --directory="$start_dir" --file --height=20)
+        local browse_result=$?
+        set -e
         
-        if [[ -f "$selected_file" ]]; then
+        # Check if user cancelled
+        if [[ $browse_result -ne 0 ]]; then
+          gum style --foreground 3 "✗ File browser cancelled" >&2
+          echo ""  # Return empty string
+          return 1
+        fi
+        
+        if [[ -n "$selected_file" && -f "$selected_file" ]]; then
           # Validate it's an ISO
           if [[ "$selected_file" == *.iso ]]; then
             echo "$selected_file"
@@ -3064,11 +3074,13 @@ create_new_vm() {
               echo "$selected_file"
               return 0
             else
+              echo ""
               return 1
             fi
           fi
         else
           gum style --foreground 1 "✗ No file selected" >&2
+          echo ""
           return 1
         fi
         ;;
@@ -3084,6 +3096,7 @@ create_new_vm() {
           return 0
         else
           gum style --foreground 1 "✗ File not found: $manual_path" >&2
+          echo ""
           return 1
         fi
         ;;
@@ -3106,7 +3119,9 @@ create_new_vm() {
     
     case "$iso_choice" in
       "Browse for ISO file")
+        set +e
         first_iso=$(browse_for_iso "Select Boot ISO (1st CD-ROM)" "$HOME")
+        set -e
         if [[ -z "$first_iso" ]]; then
           gum style --foreground 1 "✗ No ISO selected, continuing without ISO"
         else
@@ -3138,7 +3153,9 @@ create_new_vm() {
       
       case "$selected_iso" in
         "Browse for ISO elsewhere")
+          set +e
           first_iso=$(browse_for_iso "Select Boot ISO (1st CD-ROM)" "$HOME")
+          set -e
           if [[ -z "$first_iso" ]]; then
             gum style --foreground 1 "✗ No ISO selected, continuing without ISO"
           else
@@ -3156,7 +3173,9 @@ create_new_vm() {
       gum style --foreground 3 "No ISOs found in $ISO_DIR"
       
       if gum confirm "Browse for ISO file?"; then
+        set +e
         first_iso=$(browse_for_iso "Select Boot ISO (1st CD-ROM)" "$ISO_DIR")
+        set -e
         if [[ -z "$first_iso" ]]; then
           gum style --foreground 1 "✗ No ISO selected, continuing without ISO"
         else
@@ -3183,7 +3202,9 @@ create_new_vm() {
         
         case "$selected_iso2" in
           "Browse for ISO elsewhere")
+            set +e
             second_iso=$(browse_for_iso "Select Second ISO (optional)" "$HOME")
+            set -e
             if [[ -z "$second_iso" ]]; then
               gum style --foreground 1 "✗ No ISO selected, skipping second ISO"
             else
@@ -3201,7 +3222,9 @@ create_new_vm() {
     else
       # ISO_DIR doesn't exist, offer browse
       if gum confirm "Browse for second ISO file?"; then
+        set +e
         second_iso=$(browse_for_iso "Select Second ISO (optional)" "$HOME")
+        set -e
         if [[ -z "$second_iso" ]]; then
           gum style --foreground 1 "✗ No ISO selected, skipping second ISO"
         else
