@@ -515,7 +515,7 @@ Still in terminal, context preserved
 
 ## What's New in v1.1
 
-**VIRT SPINNER v1.1** adds firmware selection support, allowing you to choose between UEFI and BIOS when creating VMs.
+**VIRT SPINNER v1.1** adds firmware selection support, improved 3D acceleration handling, and enhanced UEFI boot configuration.
 
 ### 🆕 New in v1.1
 
@@ -524,7 +524,24 @@ Still in terminal, context preserved
   - BIOS/Legacy mode for older systems and maximum compatibility
   - Context-aware suggestions for each firmware type
   - Required for Windows 11 installation
+  - Automatic OVMF firmware detection and validation
+  - Proper boot order configuration for reliable ISO booting
   - Shown in VM summary with proper boot command configuration
+
+- **🎮 Smart 3D Acceleration Detection** - Intelligent EGL/OpenGL support checking
+  - Automatically detects if 3D acceleration is available on your system
+  - Checks for GPU render nodes, display environment, and OpenGL libraries
+  - Warns before enabling 3D if system doesn't support it
+  - Graceful error handling with helpful guidance when 3D fails
+  - Suggests recreating VM without 3D if EGL errors occur
+  - Prevents cryptic "EGL_NOT_INITIALIZED" errors
+
+- **🔧 Enhanced UEFI Boot Configuration**
+  - Automatic OVMF firmware detection in common locations
+  - Installation instructions if OVMF is missing
+  - Proper boot order syntax for UEFI (`--boot uefi,cdrom,hd,menu=on`)
+  - Boot menu enabled for manual boot device selection
+  - Reliable ISO booting with UEFI firmware
 
 ---
 
@@ -702,12 +719,12 @@ All with **clear progress indicators** [1/4], [2/4], etc.
   - **30+ OS variants** (Windows, Linux, BSD) with osinfo-query tip
   - **Memory allocation** with system RAM detection and safe maximums
   - **CPU allocation** with overcommit warnings
-  - **Firmware selection** (UEFI/BIOS) with use-case guidance
+  - **Firmware selection** (UEFI/BIOS) with use-case guidance and OVMF detection
   - **Disk sizing** with available space monitoring
   - **TUI ISO browser** with visual directory navigation
   - **Flexible ISO selection** (TUI browse, manual path, or skip)
   - **Permission management** for ISOs in home directories
-  - **3D acceleration** option for SPICE graphics
+  - **3D acceleration** option for SPICE graphics with smart EGL detection
   - **Boot order configuration** with boot menu enabled
   - **Optional debug mode** to view virt-install command
   - Post-creation connection summary
@@ -761,11 +778,11 @@ All with **clear progress indicators** [1/4], [2/4], etc.
 **Create New VM** - Enhanced wizard with:
 - **Intelligent defaults** calculated from system resources
 - **Resource allocation warnings** prevent over-commitment
-- **Firmware selection** (UEFI or BIOS/Legacy) with guidance
+- **Firmware selection** (UEFI or BIOS/Legacy) with guidance and OVMF validation
 - **ISO permission handling** ensures VMs boot correctly
 - **Multiple ISO support** (boot + drivers/tools)
 - **Graphics options**: VNC, SPICE, or headless
-- **3D acceleration support** (virtio-gl for SPICE)
+- **3D acceleration support** (virtio-gl for SPICE) with automatic EGL detection
 - **Network modes**: NAT, bridge, or isolated
 - **Boot order configuration** with menu enabled
 - Summary review with optional command preview
@@ -915,7 +932,7 @@ Available space in /var/lib/libvirt/images: 500GB
 
 <img width="395" height="541" alt="image" src="https://github.com/user-attachments/assets/a3e4a8b4-8d5c-4072-8839-a615950e6b9a" />
 
-### virtio-gl Support (NEW in v1.0)
+### virtio-gl Support (NEW in v1.0, Enhanced in v1.1)
 
 Enable hardware-accelerated 3D graphics for:
 - **Gaming VMs** - Better frame rates and GPU utilization
@@ -925,14 +942,25 @@ Enable hardware-accelerated 3D graphics for:
 
 **Requirements:**
 - SPICE graphics mode
+- GPU with render nodes (`/dev/dri/renderD*`)
+- Display server (X11 or Wayland) - headless systems may not support 3D
+- OpenGL/Mesa libraries installed
 - Guest needs virtio GPU drivers:
   - **Linux**: Usually included in kernel
   - **Windows**: Install virtio-win drivers
+
+**Smart Detection (v1.1):**
+- Script automatically checks if 3D acceleration is available
+- Warns before enabling if system doesn't support it
+- Provides helpful error messages if 3D fails during VM creation
+- Suggests recreating VM without 3D if EGL errors occur
 
 **Command Generated:**
 ```bash
 --video virtio --graphics spice,gl=on,listen=none
 ```
+
+**Note:** If you see "EGL_NOT_INITIALIZED" errors, your system doesn't support 3D acceleration. Use standard SPICE (without 3D) instead.
 
 ---
 
@@ -1213,6 +1241,32 @@ sudo setfacl -m u:qemu:r ~/Downloads/file.iso
 - Press ESC in BIOS to access boot menu
 - Verify ISO file is valid and accessible
 
+### "EGL_NOT_INITIALIZED" or "render node init failed" errors
+**Solution:** v1.1 detects this automatically and provides guidance:
+- Script warns before enabling 3D acceleration if EGL isn't available
+- If error occurs, script suggests recreating VM without 3D acceleration
+- **Quick fix:** When creating VM, choose "No" when asked about 3D acceleration
+- **For headless systems:** 3D acceleration requires GPU and display server
+- **Check EGL support:** `ls /dev/dri/renderD*` should show render nodes
+
+### UEFI VM doesn't boot from ISO
+**Solution:** v1.1 includes automatic OVMF detection and proper boot configuration:
+- Script checks for OVMF firmware before creating UEFI VMs
+- If OVMF is missing, install it:
+  ```bash
+  # Fedora/Nobara
+  sudo dnf install edk2-ovmf
+  
+  # Debian/Ubuntu
+  sudo apt install ovmf
+  
+  # Arch
+  sudo pacman -S edk2-ovmf
+  ```
+- Boot menu is enabled - press ESC during boot to manually select CDROM
+- Verify boot order: `virsh dumpxml vm-name | grep -A 5 boot`
+- If still not working, try BIOS mode instead
+
 ### Script exits when pressing ESC
 **Solution:** Fixed in v1.0 - ESC now safely cancels and returns to menu
 
@@ -1242,12 +1296,18 @@ mkdir -p ~/iso
 
 ## Version History
 
-### v1.1 (2025-11-29) - Firmware Selection
+### v1.1 (2025-11-29) - Firmware Selection & 3D Acceleration Improvements
 - 💾 **UEFI/BIOS firmware selection** during VM creation
 - 🎯 **Context-aware firmware guidance** (UEFI for modern OSes, BIOS for legacy)
 - ✅ **Windows 11 support** (requires UEFI firmware)
 - 🔧 **Proper boot command integration** with firmware type
 - 📋 **Firmware display** in VM creation summary
+- 🔍 **OVMF firmware detection** - Checks for UEFI firmware before VM creation
+- 📦 **OVMF installation instructions** - Distro-specific package names if missing
+- 🎮 **Smart 3D acceleration detection** - Checks EGL/OpenGL support before enabling
+- ⚠️ **EGL error handling** - Graceful failure with helpful guidance
+- 🛠️ **UEFI boot order fixes** - Reliable ISO booting with proper boot configuration
+- 🧹 **Failed VM cleanup** - Offers to clean up VMs that fail during creation
 
 ### v1.0 (2025-11-29) - Universal & Intelligent
 - 🐧 **Universal distro support** (30+ distributions)
@@ -1285,6 +1345,11 @@ mkdir -p ~/iso
 
 ## Latest Improvements
 
+- ✅ Smart 3D acceleration detection (v1.1) - Checks EGL support before enabling
+- ✅ EGL error handling with graceful recovery (v1.1)
+- ✅ OVMF firmware detection and validation (v1.1)
+- ✅ UEFI boot order improvements (v1.1) - Reliable ISO booting
+- ✅ Failed VM cleanup assistance (v1.1)
 - ✅ UEFI/BIOS firmware selection (v1.1)
 - ✅ Windows 11 support with UEFI firmware (v1.1)
 - ✅ Added 3D acceleration support (virtio-gl)
@@ -1296,7 +1361,6 @@ mkdir -p ~/iso
 - ✅ ISO permission management (ACL/symlink/copy)
 - ✅ Context-aware help for every input
 - ✅ Professional first-run experience
-- ✅ Boot order fix for reliable ISO booting
 
 <img width="724" height="447" alt="image" src="https://github.com/user-attachments/assets/94bcf8f2-afce-451d-9a3c-2f95ea499291" />
 
