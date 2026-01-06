@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -46,8 +46,8 @@ NETWORK_MODEL="e1000"                # Network adapter model (e1000=Intel PRO/10
 # Required packages for VIRT SPINNER
 REQUIRED_PACKAGES=("fzf" "dialog" "libvirt-clients" "qemu-utils" "virt-manager" "rsync" "net-tools" "pv")
 
-# Gum binary location
-GUM_BIN="$HOME/.local/bin/gum"
+# Gum binary location (auto-detect from PATH, fallback to ~/.local/bin/gum)
+GUM_BIN="$(command -v gum 2>/dev/null || echo "$HOME/.local/bin/gum")"
 
 # Settings file for persistent configuration
 SETTINGS_FILE="$HOME/.spinner_settings"
@@ -3225,7 +3225,7 @@ export_vm() {
   
   # Create restore script
   cat > "$tmpdir/restore.sh" <<"RESTORE_SCRIPT"
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
